@@ -1,27 +1,57 @@
 # Manual Assistant: build plan
 
-## Note on the existing prototype
+## What the Companion prototype contains
 
-The working directory `/home/user/Practice` is an **empty git repository**: no commits on
-`origin`, no `server.py`, `companion.html`, `Dockerfile`, `docker-compose.yml`, `README.txt`,
-launchers or icon, and no `manual.pdf` / `chunks.json`. The Companion prototype was not
-checked out into this session, so stage 1 of "How to work" (read the existing files) could
-not be carried out against real files.
+`main` carries `companion.html`, `Dockerfile`, `docker-compose.yml`,
+`Create Desktop Shortcut.bat`, `companion.ico` and `chunks.json`. All four text files have
+been read. `server.py`, `README.txt` and `Start Companion.bat` are not in the upload, so the
+backend was not available to read; the new backend is written from the task description
+instead, against the front-end contract visible in `companion.html`.
 
-Consequences:
+`chunks.json` and `manual.pdf` are not read, copied or referenced. `chunks.json` is present
+in the repository because it was uploaded there, and no code path in the new app looks outside
+`data/manuals/`. `manual.pdf` is not in the repository at all.
 
-- The two ideas worth keeping are taken from your description rather than from the code:
-  streamed answers, and `[n]` citations that open the PDF at the cited page. Both are in the
-  design below.
-- The eight review findings are the ones listed in the task description; each is mapped to a
-  fix in the table below.
-- Nothing is copied, read or referenced from `manual.pdf` or `chunks.json`. They do not exist
-  here, and the new app has no code path that would look for them.
-- No original file is modified or deleted, because none exists. Everything new lives under
-  `manual-assistant/`.
+### Reused from Companion
 
-If the Companion files exist somewhere you can push or attach, say so and I will read them
-before stage 1 and adjust.
+- Streamed answers, so the first words appear before the model has finished.
+- `[n]` citations rendered as links to `<pdf>#page=<n>`, opening the PDF at the cited page.
+  Kept, with the citation also scrolling to and highlighting the matching section card.
+- The reference list under the answer, each entry numbered and linked. Extended into the
+  section cards, which now also carry section path, printed page label, snippet and preview.
+- The small Markdown renderer limited to ordered lists, unordered lists, paragraphs and bold.
+  Kept as the only formatting the model output is allowed to produce, but it builds DOM nodes
+  with `textContent` rather than assembling an HTML string.
+- From `docker-compose.yml`: the `ollama` service with no published port, the
+  `ollama serve` then `ollama pull` entrypoint, the `ollama list` healthcheck, the
+  `depends_on: service_healthy` gate, the named model volume, and the commented NVIDIA GPU
+  block. The pull step is extended to fetch `bge-m3` as well as `LLM_MODEL`.
+
+### Confirmed against the code
+
+- `Dockerfile` does `COPY server.py companion.html manual.pdf ./`, so exactly one manual is
+  baked into the image. The new app keeps manuals in a volume at `data/manuals/` and indexes
+  many of them.
+- `Dockerfile` sets `ENV HOST=0.0.0.0`, and `docker-compose.yml` publishes `8000:8000`, so the
+  app is reachable on every interface with no proxy and no login. The new app defaults to
+  `127.0.0.1`, listens on `0.0.0.0` only inside the container, and publishes 80 and 443 only,
+  through Caddy.
+- `companion.html` hard-codes the title, the titlebar, `header h1`, the greeting
+  "Hello, I'm Companion, a virtual assistant", and the single example question, which names
+  another product's report. All of this moves to `config.yaml`.
+- `refsHtml()` prints `page ' + esc(r.page)`, a single page value with no section path and no
+  distinction between the printed label and the PDF page number. The new cards show manual
+  title, section path, printed label and PDF page as separate fields.
+- The wire format is one line of JSON metadata followed by raw answer text. It is replaced by
+  Server-Sent Events with named `sources`, `token`, `done` and `error` events, which gives the
+  front end a defined failure path instead of `catch` printing one generic sentence.
+- `esc()` escapes only `&`, `<` and `>`, and the result is then written through `innerHTML`
+  together with an `href` built from server data. The new front end inserts all server and
+  model text as text nodes and builds links with `setAttribute`.
+- Reading the remaining findings (500 character cut, split tables, keyword-only English
+  search, no follow-ups, no login, no logging, no feedback, hang on a bad PDF) requires
+  `server.py`, which is missing. They are taken as stated in the task description and each is
+  fixed below.
 
 ## Review findings mapped to fixes
 
