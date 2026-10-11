@@ -1,0 +1,42 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama          # model cached here, downloaded once
+    # On first start this pulls the model, then serves it. After that it is offline.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 5
+        ollama pull "${LLM_MODEL:-llama3.2}"
+        wait
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # To use an NVIDIA GPU on the server, uncomment the block below:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"                            # users open http://<server-ip>:8000
+    environment:
+      - OLLAMA_URL=http://ollama:11434/api/chat
+      - LLM_MODEL=${LLM_MODEL:-llama3.2}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ollama_models:
