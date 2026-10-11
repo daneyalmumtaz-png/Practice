@@ -11,6 +11,7 @@ do not contain the answer, the app says so and still shows the closest sections.
 ## Contents
 
 - [What it does](#what-it-does)
+- [Try it on a Windows computer](#try-it-on-a-windows-computer)
 - [Run locally without Docker](#run-locally-without-docker)
 - [Run with Docker](#run-with-docker)
 - [Deploy on a cloud virtual machine with a domain name](#deploy-on-a-cloud-virtual-machine-with-a-domain-name)
@@ -49,6 +50,84 @@ into standalone questions from the last three turns before searching.
 
 Superseded manuals stay searchable for admins and are never cited in an answer.
 
+## Try it on a Windows computer
+
+The shortest way to see the app working, for one person on their own machine.
+Two things to install, then two files to double-click.
+
+**1. Install Python.** Go to <https://www.python.org/downloads/>, download 3.12
+or newer, and run the installer. On the very first screen, tick **"Add
+python.exe to PATH"** before pressing Install. Missing that tick is the one
+thing that goes wrong here.
+
+**2. Install Ollama**, which runs the models on your own machine so no manual
+text leaves it. Get it from <https://ollama.com/download>, run the installer,
+then open **Command Prompt** and run these two lines. Together they download
+about 6 GB, so do it on a decent connection and expect to wait.
+
+```
+ollama pull llama3.1:8b
+ollama pull bge-m3
+```
+
+**3. Set up the app.** Open the `manual-assistant\windows` folder and
+double-click **Setup Manual Assistant.bat**. It installs the app's components,
+then asks you to choose a username and password. That account is an
+administrator, so it can upload manuals. The window tells you when it is
+finished. Run this once.
+
+**4. Start the app.** Double-click **Start Manual Assistant.bat**. A black
+window opens and your browser follows a few seconds later at
+<http://127.0.0.1:8000>. Sign in with the username and password from step 3.
+
+Leave the black window open while you use the app. Closing it stops the app.
+Your manuals and index are kept, so starting it again picks up where you left
+off. **Create Desktop Shortcut.bat** puts an icon on your Desktop if you would
+rather start it from there.
+
+**5. Upload a manual.** Click **Admin** in the top right, choose a PDF, give it
+a title, tick the licence confirmation and press **Upload and index**. A long
+manual takes a few minutes. Then go back and ask a question.
+
+### What to expect on a laptop
+
+The matching sections appear in about a second. The written answer is the slow
+part: `llama3.1:8b` on a laptop with no graphics card takes roughly 20 to 60
+seconds for a full set of steps. That is the model thinking, not the app
+waiting. The sections are usable immediately and are the part you should trust,
+because each one links to the page in the PDF.
+
+The app binds to `127.0.0.1`, which means this computer only. Nobody else on
+the office network can reach it. To let colleagues use it, put it on a server
+instead: see [Run with Docker](#run-with-docker).
+
+### If something goes wrong
+
+**"Python is not installed, or not on the PATH"** when you double-click Setup.
+The tick in step 1 was missed. Re-run the Python installer, choose **Modify**,
+and make sure the PATH option is on.
+
+**Your IT policy blocks the installers.** Both Python and Ollama install for a
+single user and normally need no administrator rights, but a managed Destia
+laptop may still refuse. If so, ask for the two installers through the normal
+software request route, or run the app on a server and use it in the browser,
+which needs nothing installed on your own machine.
+
+**The app says the model could not be reached.** Ollama is not running. Start
+it from the Start menu, wait a few seconds, and ask again. The sections are
+still correct meanwhile.
+
+**The app says keyword search only was used.** `bge-m3` is missing. Run
+`ollama pull bge-m3`, then press **Re-index** against each manual on the Admin
+page so its index is rebuilt with the new model.
+
+**Port 8000 is already in use.** The setup script picks 8099 instead and says
+so. If you hit this later, open `local.env` in Notepad and change the `PORT`
+line.
+
+**You forgot the password.** Delete `users.yaml` from the `manual-assistant`
+folder and run Setup again. Manuals and the index are untouched.
+
 ## Run locally without Docker
 
 Needs Python 3.12 and, for real answers, [Ollama](https://ollama.com).
@@ -77,7 +156,15 @@ export EMBED_BASE_URL=http://127.0.0.1:11434
 export COOKIE_SECURE=0               # only because this is plain http on localhost
 ```
 
-Create a user, then start the app:
+Create a user, then start the app. The two scripts below do the same work as
+the Windows batch files, and ask the same questions:
+
+```bash
+python scripts/first_run.py          # asks for a username and password
+python scripts/start.py              # starts the app and opens your browser
+```
+
+Or do it by hand, if you would rather see every step:
 
 ```bash
 python -m app.auth hash              # type a password, copy the printed hash

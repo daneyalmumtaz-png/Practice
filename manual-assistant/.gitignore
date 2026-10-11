@@ -5,3 +5,4 @@ __pycache__/
 users.yaml
 .env
 eval/results-*.csv
+local.env
