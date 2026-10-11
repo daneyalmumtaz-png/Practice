@@ -43,4 +43,8 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8000/healthz | grep -q '"status": "ok"'
 
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-config", "/dev/null"]
+# app.main installs the JSON log handler on uvicorn's own loggers when it is
+# imported, which happens after uvicorn has configured logging, so uvicorn needs
+# no log options here. Passing --log-config /dev/null makes uvicorn refuse to
+# start, because it rejects an empty configuration file.
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

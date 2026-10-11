@@ -711,3 +711,40 @@ def test_healthz_marks_a_model_that_is_down(api):
 
 def test_healthz_needs_no_session(api):
     assert api.get("/healthz").status_code == 200
+
+
+def test_the_chat_page_draws_cards_from_the_fast_search_endpoint(api):
+    """The cards must not wait on a model call.
+
+    /api/ask can make up to two model calls before it searches, to rewrite a
+    follow-up and to write an English query. On a small server those take
+    seconds, so the page asks /api/search as well, which makes no model call.
+    """
+    source = (api.app_module.settings.static_dir / "chat.js").read_text("utf-8")
+    assert '"/api/search"' in source
+    assert '"/api/ask"' in source
+    # The sources event is what the answer cites, so it has the final say.
+    assert "showSections(payload, true)" in source
+    assert "showSections(payload, false)" in source
+
+
+def test_search_answers_a_follow_up_without_waiting_for_a_rewrite(api, tmp_path: Path):
+    """The fast path is fast even when the ask path has rewriting to do."""
+    sign_in(api)
+    load_manual(api, tmp_path)
+    before = api.stub.chat_calls
+
+    response = api.post("/api/search", json={"question": "and which fields?"})
+    assert response.status_code == 200
+    assert response.json()["sections"]
+    assert api.stub.chat_calls == before
+
+
+def test_the_page_does_not_claim_sources_when_there_is_no_answer(api):
+    """A failed model call must not be labelled "Answer based on N sources"."""
+    source = (api.app_module.settings.static_dir / "chat.js").read_text("utf-8")
+    assert "failed = true;" in source
+    assert 'if (failed || !answerText.trim())' in source
+    index = source.index('if (failed || !answerText.trim())')
+    claim = source.index('"Answer based on "')
+    assert index < claim, "the failure case must be checked before the claim is made"

@@ -336,6 +336,7 @@
     var sectionsHeading = el("h2", "section-heading", "Governing sections");
     turn.appendChild(sectionsHeading);
     var cards = el("div", "cards");
+    var noteLine = null;
     var searching = el("p", "spinner", "Searching…");
     cards.appendChild(searching);
     turn.appendChild(cards);
@@ -346,7 +347,9 @@
     var answerBody = null;
     var provenance = null;
     var answerText = "";
-    var sectionCount = 0;
+    var shownIds = null;        // chunk ids of the cards currently drawn
+    var finalShown = false;     // the sources event has arrived and won
+    var failed = false;         // an error event arrived, so there is no answer
 
     function ensureAnswerBox() {
       if (answerBox) { return; }
@@ -360,19 +363,35 @@
       turn.appendChild(answerBox);
     }
 
-    function showSections(payload) {
-      searching.remove();
+    /* Drawn at most twice.
+     *
+     * /api/search answers with no model call, so the cards appear at once. The
+     * sources event of /api/ask then carries the final list, which can differ
+     * when a follow-up was rewritten or a Finnish question was also searched in
+     * English, and whose numbering is what the answer cites. An identical list
+     * is not redrawn, so the common case shows no change.
+     */
+    function showSections(payload, isFinal) {
+      if (finalShown && !isFinal) { return; }
       var list = payload.sections || [];
-      sectionCount = list.length;
-      if (!list.length) {
-        cards.appendChild(el(
-          "p", "notice", "No matching section was found in the uploaded manuals."
-        ));
-      } else {
-        list.forEach(function (section) {
-          cards.appendChild(sectionCard(section, turnId));
-        });
+      var ids = list.map(function (s) { return s.chunk_id; }).join(",");
+
+      searching.remove();
+      if (shownIds !== ids) {
+        cards.textContent = "";
+        if (!list.length) {
+          cards.appendChild(el(
+            "p", "notice", "No matching section was found in the uploaded manuals."
+          ));
+        } else {
+          list.forEach(function (section) {
+            cards.appendChild(sectionCard(section, turnId));
+          });
+        }
+        shownIds = ids;
       }
+      if (isFinal) { finalShown = true; }
+
       var notes = (payload.notes || []).slice();
       if (payload.used_embeddings === false) {
         notes.push("keyword search only, the embedding model was not available");
@@ -380,12 +399,25 @@
       if (payload.rewritten && payload.question) {
         notes.push("searched as: " + payload.question);
       }
+      if (noteLine) { noteLine.remove(); noteLine = null; }
       if (notes.length) {
-        var note = el("p", "pageline", notes.join(" · "));
-        sectionsHeading.insertAdjacentElement("afterend", note);
+        noteLine = el("p", "pageline", notes.join(" · "));
+        sectionsHeading.insertAdjacentElement("afterend", noteLine);
       }
-      ensureAnswerBox();
+      if (isFinal) { ensureAnswerBox(); }
     }
+
+    /* The fast list, which needs no model, so it is not waiting on a rewrite or
+       on an English query being written. */
+    fetch("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: question })
+    }).then(function (response) {
+      return response.ok ? response.json() : null;
+    }).then(function (payload) {
+      if (payload) { showSections(payload, false); }
+    }).catch(function () { /* the ask stream draws the cards instead */ });
 
     fetch("/api/ask", {
       method: "POST",
@@ -406,12 +438,13 @@
 
       function onEvent(name, payload) {
         if (name === "sources") {
-          showSections(payload);
+          showSections(payload, true);
         } else if (name === "token") {
           ensureAnswerBox();
           answerText += payload.t || "";
           renderAnswer(answerBody, answerText, turnId);
         } else if (name === "error") {
+          failed = true;
           ensureAnswerBox();
           answerBody.textContent = "";
           answerBody.appendChild(el("p", "notice", payload.detail || "Something went wrong."));
@@ -419,7 +452,14 @@
           ensureAnswerBox();
           if (answerText) { renderAnswer(answerBody, answerText, turnId); }
           var used = payload.source_count || 0;
-          if (used > 0 && !payload.not_found) {
+          /* "Answer based on N sources" is shown only when there actually is an
+             answer that used them. A failed model call, or a reply that found
+             nothing in the manuals, gets the warning style instead. */
+          if (failed || !answerText.trim()) {
+            answerBox.classList.add("nosources");
+            provenance.textContent =
+              "No answer was produced. The sections above are still the best matches.";
+          } else if (used > 0 && !payload.not_found) {
             provenance.textContent =
               "Answer based on " + used + (used === 1 ? " source" : " sources") +
               " · " + Math.round(payload.latency_ms / 100) / 10 + " s";
@@ -429,7 +469,7 @@
               ? "Not answered from the manuals. Check the sections above."
               : "No source was used. Nothing in the uploaded manuals matched.";
           }
-          if (payload.question_id) {
+          if (payload.question_id && !failed && answerText.trim()) {
             answerBox.appendChild(ratingRow(payload.question_id));
           }
           history.push({ question: question, answer: answerText.slice(0, 4000) });

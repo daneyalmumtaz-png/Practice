@@ -705,9 +705,9 @@ async def retention_sweep() -> None:
 def run() -> None:
     import uvicorn
 
-    uvicorn.run(
-        "app.main:app", host=settings.host, port=settings.port, log_config=None
-    )
+    # No log configuration is passed: importing this module has already pointed
+    # uvicorn's loggers at the JSON handler.
+    uvicorn.run("app.main:app", host=settings.host, port=settings.port)
 
 
 if __name__ == "__main__":
