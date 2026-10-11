@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title>
+<link rel="stylesheet" href="/static/style.css">
+<!--APP_CONFIG-->
+</head>
+<body>
+<div class="login-wrap">
+  <div class="card">
+    <h1 id="app-name"></h1>
+    <p class="disclaimer" id="disclaimer"></p>
+    <div class="notice" id="error" hidden></div>
+    <form method="post" action="/login">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" required autofocus>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button class="primary" type="submit">Sign in</button>
+    </form>
+  </div>
+</div>
+<script>
+  // Every string on this page comes from config.yaml by way of window.APP_CONFIG.
+  var cfg = window.APP_CONFIG || {};
+  document.title = (cfg.appName || "Sign in") + " - sign in";
+  document.getElementById("app-name").textContent = cfg.appName || "";
+  document.getElementById("disclaimer").textContent = cfg.disclaimer || "";
+  if (cfg.error) {
+    var box = document.getElementById("error");
+    box.textContent = cfg.error;
+    box.hidden = false;
+  }
+</script>
+</body>
+</html>

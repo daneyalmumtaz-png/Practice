@@ -1,0 +1,4 @@
+# Batch files and the plain-text guide are read on Windows, so they keep Windows
+# line endings. A .bat with Unix endings can misbehave around labels and pause.
+*.bat text eol=crlf
+*.txt text eol=crlf

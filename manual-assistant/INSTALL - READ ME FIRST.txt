@@ -1,0 +1,132 @@
+MANUAL ASSISTANT
+Ask questions about Bentley manuals in English or Finnish.
+
+================================================================
+WHAT YOU NEED TO INSTALL FIRST (two things, once)
+================================================================
+
+1) PYTHON
+   Go to          https://www.python.org/downloads/
+   Download       version 3.12 or newer
+   IMPORTANT      On the FIRST screen of the installer, tick
+                  "Add python.exe to PATH"
+                  before you press Install. If you miss this tick,
+                  nothing below will work.
+
+2) OLLAMA
+   This runs the AI on your own computer, so nothing from your
+   manuals is sent anywhere.
+
+   Go to          https://ollama.com/download
+   Install it, then open Command Prompt (press the Windows key,
+   type cmd, press Enter) and run these two lines, one at a time:
+
+       ollama pull llama3.1:8b
+       ollama pull bge-m3
+
+   Together these download about 6 GB. Do it on a good connection
+   and expect to wait. You only do this once.
+
+================================================================
+SETTING UP THE APP (once)
+================================================================
+
+Open the folder called   windows
+Double-click             Setup Manual Assistant.bat
+
+It will install what the app needs, then ask you to choose a
+username and password. Write them down. That account can upload
+manuals.
+
+The window tells you when it has finished. If it reports a
+problem, read the message, fix it, and double-click the file
+again. Nothing is broken by running it twice.
+
+================================================================
+USING THE APP (every time)
+================================================================
+
+Double-click             windows\Start Manual Assistant.bat
+
+A black window opens, then your web browser a few seconds later.
+Sign in with the username and password from the step above.
+
+Leave the black window open while you use the app. Closing it
+stops the app. Your manuals and the search index are kept, so
+starting it again picks up where you left off.
+
+If you would rather have an icon on your Desktop, double-click
+windows\Create Desktop Shortcut.bat once.
+
+================================================================
+ADDING A MANUAL
+================================================================
+
+1. Click  Admin  in the top right corner.
+2. Choose a PDF, give it a title, a product and a version.
+3. Tick the licence confirmation. This is required, and who
+   ticked it is recorded against the document.
+4. Press  Upload and index.
+
+A long manual takes a few minutes, most of it building the search
+index. When it says ready, go back and ask a question.
+
+To replace an old edition, upload the new one and set the old one
+to "superseded". A superseded manual stays searchable for
+administrators and is never used to answer a question.
+
+================================================================
+WHAT TO EXPECT
+================================================================
+
+The list of matching sections appears in about one second.
+
+The written answer is the slow part. On a laptop with no graphics
+card it takes roughly 20 to 60 seconds. That is the AI thinking,
+not the app stuck.
+
+Trust the sections, not the prose. Every section card shows the
+manual, the section path, the printed page number and the PDF page
+number, and opens the PDF at that page. Every step in the answer
+carries a [1] you can click to jump to the section it came from.
+
+If the manuals do not contain the answer, the app says
+"Not found in the uploaded manuals" instead of inventing one.
+
+The app is reachable only from your own computer. Nobody else on
+the office network can see it. To let colleagues use it, it needs
+to go on a server: see the "Run with Docker" and "Deploy on a
+cloud virtual machine" sections of README.md.
+
+================================================================
+WHEN SOMETHING GOES WRONG
+================================================================
+
+"Python is not installed, or not on the PATH"
+   The tick in step 1 was missed. Run the Python installer again,
+   choose Modify, and turn on the PATH option.
+
+"The language model could not be reached"
+   Ollama is not running. Start it from the Start menu, wait a few
+   seconds and ask again. The sections are still correct.
+
+"keyword search only, the embedding model was not available"
+   The bge-m3 model is missing. Run  ollama pull bge-m3  then
+   press Re-index next to each manual on the Admin page.
+
+A manual shows "failed"
+   The reason is written next to it. Usually a scanned PDF with no
+   text in it, a password-protected file, or an interrupted
+   upload. Every other manual keeps working.
+
+You forgot your password
+   Delete the file  users.yaml  from this folder and run
+   Setup Manual Assistant.bat again. Your manuals are untouched.
+
+Port 8000 is already in use
+   The setup picks 8099 instead and says so. If it happens later,
+   open  local.env  in Notepad and change the PORT line.
+
+Anything else
+   README.md has a fuller troubleshooting section, plus how to put
+   this on a server for the whole team.
