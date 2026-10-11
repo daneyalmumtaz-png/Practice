@@ -371,3 +371,33 @@ def test_superseded_document_is_not_searchable_by_default(workspace, tmp_path: P
     assert old.doc_id not in {r["doc_id"] for r in default}
     assert current.doc_id in {r["doc_id"] for r in default}
     assert old.doc_id in {r["doc_id"] for r in with_old}
+
+
+def test_a_short_document_keeps_its_text(tmp_path: Path):
+    """A one page PDF has every line on 100% of its pages.
+
+    Treating that as a running footer emptied the document, so boilerplate
+    removal needs a minimum number of pages before it does anything.
+    """
+    import pymupdf
+
+    path = tmp_path / "one-page.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((60, 100), "Borehole records are read from a delimited file.")
+    page.insert_text((60, 130), "Each record needs a depth and a sample number.")
+    doc.save(str(path))
+    doc.close()
+
+    extraction = extract(path)
+    assert extraction.boilerplate == []
+    assert len(extraction.blocks) == 2
+    assert any("Borehole records" in b.text for b in extraction.blocks)
+
+
+def test_boilerplate_needs_a_minimum_number_of_pages():
+    assert find_boilerplate({0: ["only line"]}, share=0.2) == set()
+    assert find_boilerplate({0: ["footer"], 1: ["footer"]}, share=0.2) == set()
+    assert find_boilerplate(
+        {0: ["footer"], 1: ["footer"], 2: ["footer"]}, share=0.2
+    ) == {"footer"}

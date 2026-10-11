@@ -126,9 +126,12 @@ def find_boilerplate(
 ) -> set[str]:
     """Normalised lines appearing on more than `share` of the pages.
 
-    Those are running headers, footers and licence stamps. `min_pages` keeps the
-    rule from stripping real content out of a very short document, where 20% of
-    the pages can be a single page.
+    Those are running headers, footers and licence stamps.
+
+    A line must also appear on at least `min_pages` pages. Without that, a one
+    page document has every one of its lines on 100% of its pages and loses all
+    of its text. Below `min_pages` pages there is no way to tell a running footer
+    from body text, so nothing is removed.
     """
     page_count = len(lines_by_page)
     if page_count == 0:
@@ -143,7 +146,7 @@ def find_boilerplate(
     return {
         key
         for key, pages in seen.items()
-        if len(pages) > threshold and len(pages) >= min(min_pages, page_count)
+        if len(pages) > threshold and len(pages) >= min_pages
     }
 
 
