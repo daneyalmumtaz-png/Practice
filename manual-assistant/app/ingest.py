@@ -17,7 +17,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import db
+from . import db, embed
 from .chunker import chunk_blocks
 from .config import Settings, get_settings
 from .logsetup import get_logger, setup_logging
@@ -100,6 +100,7 @@ class IngestResult:
     table_count: int = 0
     skipped_pages: int = 0
     section_source: str = ""
+    vector_count: int = 0
     error: str = ""
     cached: bool = False
 
@@ -122,6 +123,7 @@ def index_document(
 
         if not path.exists():
             db.mark_failed(conn, doc_id, f"file is missing: {row['filename']}")
+            embed.drop_document_vectors(doc_id, s)
             log.error("ingest_failed", extra={"doc_id": doc_id, "reason": "missing_file"})
             return IngestResult(doc_id, db.INGEST_FAILED, error="file is missing")
 
@@ -158,6 +160,7 @@ def index_document(
         except Exception as exc:                       # noqa: BLE001 - recorded, not raised
             message = f"{type(exc).__name__}: {exc}"
             db.mark_failed(conn, doc_id, message)
+            embed.drop_document_vectors(doc_id, s)
             log.error(
                 "ingest_failed",
                 extra={"doc_id": doc_id, "title": title, "error": message},
@@ -175,6 +178,14 @@ def index_document(
             ingest_error="",
             indexed_at=db.utcnow(),
         )
+        stored = db.chunks_for_doc(conn, doc_id)
+        vector_count = embed.build_document_vectors(
+            doc_id,
+            [r["text"] for r in stored],
+            [int(r["id"]) for r in stored],
+            s,
+        )
+
         skipped = sum(1 for p in extraction.pages if p.skipped)
         log.info(
             "ingest_ready",
@@ -186,6 +197,7 @@ def index_document(
                 "tables": extraction.table_count,
                 "skipped_pages": skipped,
                 "sections_from": extraction.section_source,
+                "vectors": vector_count,
             },
         )
         return IngestResult(
@@ -196,6 +208,7 @@ def index_document(
             table_count=extraction.table_count,
             skipped_pages=skipped,
             section_source=extraction.section_source,
+            vector_count=vector_count,
         )
 
 
@@ -283,6 +296,26 @@ def ingest_path(
                 licence_confirmed_by=licence_confirmed_by,
             )
     return index_document(doc_id, settings=s, force=force)
+
+
+def remove_document(doc_id: int, settings: Settings | None = None) -> bool:
+    """Delete a document, its chunks, its stored vectors and its file."""
+    s = settings or get_settings()
+    with db.session(s.db_path) as conn:
+        row = db.get_document(conn, doc_id)
+        if row is None:
+            return False
+        filename = row["filename"]
+        db.delete_document(conn, doc_id)
+    embed.drop_document_vectors(doc_id, s)
+    target = s.manuals_dir / filename
+    try:
+        if target.is_file() and target.parent == s.manuals_dir:
+            target.unlink()
+    except OSError as exc:
+        log.warning("file_delete_failed", extra={"doc_id": doc_id, "error": str(exc)})
+    log.info("document_deleted", extra={"doc_id": doc_id, "title": row["title"]})
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:

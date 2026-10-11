@@ -105,7 +105,7 @@ def build_sample_pdf(path: Path) -> Path:
         130,
         "This chapter explains how to start the example program and open an\n"
         "existing project. The program stores every project in a single folder\n"
-        "together with its survey data and its report templates.",
+        "together with its survey data and its drawing settings.",
     )
     _footer(p, 3)
 
@@ -250,7 +250,12 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     config_module.get_settings.cache_clear()
     settings = config_module.get_settings()
     db.init_db(settings.db_path)
+
+    from app import search as search_module
+
+    search_module.reset_indexes()
     yield settings
+    search_module.reset_indexes()
     config_module.get_settings.cache_clear()
 
 
@@ -262,3 +267,48 @@ def sample_pdf(workspace, tmp_path: Path) -> Path:
 @pytest.fixture
 def no_bookmarks_pdf(workspace, tmp_path: Path) -> Path:
     return build_no_bookmarks_pdf(tmp_path / "no-bookmarks.pdf")
+
+
+# Concept dimensions shared by the English and Finnish words for the same thing.
+# This is a stand-in for a multilingual embedding model, good enough to exercise
+# the vector half of the search and the fusion. It says nothing about the real
+# quality of bge-m3.
+FAKE_CONCEPTS: tuple[tuple[str, ...], ...] = (
+    ("borehole", "boreholes", "kairaus", "pohjatutkimus", "pohjatutkimustieto"),
+    ("report", "reports", "reporting", "raportti", "raporttipohja", "template"),
+    ("coordinate", "coordinates", "koordinaatisto", "projection"),
+    ("import", "imported", "importer", "importing", "tuoda", "tuonti"),
+    ("field", "fields", "column", "columns", "kentta", "sarake"),
+    ("project", "projects", "folder", "projekti", "kansio"),
+)
+
+
+def fake_embedder(concepts: tuple[tuple[str, ...], ...] = FAKE_CONCEPTS):
+    """Return a replacement for app.embed.embed_texts."""
+    import numpy as np
+
+    from app.lang import words
+
+    def embed_texts(texts, settings=None):
+        rows = []
+        for text in texts:
+            present = set(words(text))
+            # Finnish compounds are matched on a prefix, as a real subword model
+            # would, so "pohjatutkimustiedot" reaches the borehole dimension.
+            vector = []
+            for group in concepts:
+                score = 0.0
+                for term in group:
+                    if term in present or any(w.startswith(term) for w in present):
+                        score = 1.0
+                        break
+                vector.append(score)
+            if not any(vector):
+                vector = [0.01] * len(concepts)
+            rows.append(vector)
+        matrix = np.asarray(rows, dtype=np.float32)
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return matrix / norms
+
+    return embed_texts
