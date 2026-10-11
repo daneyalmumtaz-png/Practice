@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
 import pymupdf
@@ -312,3 +313,191 @@ def fake_embedder(concepts: tuple[tuple[str, ...], ...] = FAKE_CONCEPTS):
         return matrix / norms
 
     return embed_texts
+
+
+# --------------------------------------------------------------------- stub model
+
+class StubModel:
+    """State of the stand-in model server, writable from a test."""
+
+    def __init__(self) -> None:
+        self.base_url = ""
+        self.answer = "Summary line [1]\n\n1. First step [1]\n2. Second step [2]"
+        self.rewrite = ""
+        self.english_query = ""
+        self.chat_status = 200
+        self.chat_error = ""
+        self.embed_status = 200
+        self.requests: list[dict] = []
+        self.chat_calls = 0
+        self.embed_calls = 0
+
+    def reply_for(self, messages: list[dict]) -> str:
+        system = (messages[0].get("content") or "") if messages else ""
+        if "rewrite" in system.lower():
+            return self.rewrite or (messages[-1].get("content") or "")
+        if "search query" in system.lower():
+            return self.english_query
+        return self.answer
+
+
+@pytest.fixture
+def stub_model():
+    """A real HTTP server that speaks the two APIs the app calls.
+
+    Chat completions in the OpenAI shape, streaming and not, and the Ollama
+    embeddings endpoint. Running it over real TCP means the app's own HTTP
+    client, SSE parsing and timeouts are exercised, not mocked away.
+    """
+    import json as json_module
+    import socket
+    import threading
+
+    import uvicorn
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse, StreamingResponse
+    from starlette.routing import Route
+
+    state = StubModel()
+
+    async def chat(request):
+        payload = await request.json()
+        state.requests.append(payload)
+        state.chat_calls += 1
+        if state.chat_status != 200:
+            return JSONResponse(
+                {"error": state.chat_error or "stub failure"},
+                status_code=state.chat_status,
+            )
+        text = state.reply_for(payload.get("messages") or [])
+        if not payload.get("stream"):
+            return JSONResponse(
+                {
+                    "id": "stub",
+                    "choices": [
+                        {"index": 0, "message": {"role": "assistant", "content": text}}
+                    ],
+                }
+            )
+
+        async def events():
+            # Split into small pieces so the test sees a real token stream.
+            step = 12
+            for start in range(0, len(text), step):
+                chunk = {
+                    "choices": [{"index": 0, "delta": {"content": text[start:start + step]}}]
+                }
+                yield f"data: {json_module.dumps(chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(events(), media_type="text/event-stream")
+
+    async def models(request):
+        if state.chat_status != 200:
+            return JSONResponse({"error": "down"}, status_code=state.chat_status)
+        return JSONResponse({"data": [{"id": "stub-model"}]})
+
+    async def embeddings(request):
+        payload = await request.json()
+        state.embed_calls += 1
+        if state.embed_status != 200:
+            return JSONResponse({"error": "down"}, status_code=state.embed_status)
+        texts = payload.get("input")
+        if isinstance(texts, str):
+            texts = [texts]
+        if texts is None:
+            texts = [payload.get("prompt") or ""]
+        vectors = fake_embedder()(texts)
+        return JSONResponse({"embeddings": [row.tolist() for row in vectors]})
+
+    stub = Starlette(
+        routes=[
+            Route("/v1/chat/completions", chat, methods=["POST"]),
+            Route("/v1/models", models, methods=["GET"]),
+            Route("/api/embed", embeddings, methods=["POST"]),
+        ]
+    )
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+
+    config = uvicorn.Config(stub, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.time() + 15
+    while not server.started and thread.is_alive() and time.time() < deadline:
+        time.sleep(0.02)
+    if not server.started:
+        pytest.fail("the stub model server did not start")
+
+    state.base_url = f"http://127.0.0.1:{port}"
+    yield state
+    server.should_exit = True
+    thread.join(timeout=10)
+
+
+@pytest.fixture
+def api(workspace, stub_model, monkeypatch: pytest.MonkeyPatch):
+    """A TestClient for the app, pointed at the stub model, with two users.
+
+    app.main reads its settings at import time, so it is reloaded here after the
+    environment is in place.
+    """
+    import importlib
+
+    from app import auth
+    from app import config as config_module
+    from app import search as search_module
+    from fastapi.testclient import TestClient
+
+    password_hash = auth.hash_password(TEST_PASSWORD)
+    monkeypatch.setenv("LLM_BASE_URL", stub_model.base_url + "/v1")
+    monkeypatch.setenv("EMBED_BASE_URL", stub_model.base_url)
+    monkeypatch.setenv("LLM_API_KEY", "stub-key")
+    monkeypatch.setenv("LLM_TIMEOUT_S", "20")
+    monkeypatch.setenv("EMBED_TIMEOUT_S", "20")
+    monkeypatch.setenv(
+        "USERS_YAML",
+        yaml_users(
+            [("admin", "admin", password_hash), ("engineer", "user", password_hash)]
+        ),
+    )
+    config_module.get_settings.cache_clear()
+    auth.set_backend(None)
+    search_module.reset_indexes()
+
+    import app.main as main_module
+
+    importlib.reload(main_module)
+    client = TestClient(main_module.app)
+    client.app_module = main_module          # type: ignore[attr-defined]
+    client.stub = stub_model                 # type: ignore[attr-defined]
+    with client:
+        yield client
+    auth.set_backend(None)
+    search_module.reset_indexes()
+    config_module.get_settings.cache_clear()
+
+
+TEST_PASSWORD = "test-password-1234"
+
+
+def yaml_users(entries: list[tuple[str, str, str]]) -> str:
+    lines = ["users:"]
+    for username, role, password_hash in entries:
+        lines.append(f"  - username: {username}")
+        lines.append(f"    role: {role}")
+        lines.append(f'    password_hash: "{password_hash}"')
+    return "\n".join(lines) + "\n"
+
+
+def sign_in(client, username: str = "engineer", password: str | None = None):
+    response = client.post(
+        "/login",
+        data={"username": username, "password": password or TEST_PASSWORD},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303, response.text
+    return response

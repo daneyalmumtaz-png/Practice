@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual Assistant</title>
+<link rel="stylesheet" href="/static/style.css">
+<!--APP_CONFIG-->
+</head>
+<body>
+<header class="bar">
+  <div class="inner">
+    <div class="who" id="who"></div>
+    <h1 id="app-name"></h1>
+    <p class="disclaimer" id="disclaimer"></p>
+  </div>
+</header>
+<main>
+  <p class="greeting" id="greeting"></p>
+  <form class="askbar" id="askform" autocomplete="off">
+    <input type="text" id="question" name="question" placeholder="Ask a question" required>
+    <button class="primary" type="submit" id="asksubmit">Ask</button>
+  </form>
+  <div class="examples" id="examples"></div>
+  <div id="conversation"></div>
+</main>
+<script src="/static/chat.js"></script>
+</body>
+</html>
