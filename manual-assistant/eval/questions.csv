@@ -1,0 +1,6 @@
+question,language,expected_doc,expected_pages,notes
+How do I import borehole data?,en,,,"Fill expected_pages with the PDF page numbers that answer this, comma separated, after uploading the manual."
+What file formats can be imported?,en,,,"Leave expected_doc as the title you gave the manual in the admin page."
+Miten tuon pohjatutkimustiedot ohjelmaan?,fi,,,"Finnish wording of the first question. The manual is in English, so this checks cross-language retrieval."
+Mistä löydän raporttipohjat?,fi,,,"Finnish. Replace with wording your colleagues would actually type."
+Where are the project settings stored?,en,,,"Replace this row with a question you were asked in real support."
