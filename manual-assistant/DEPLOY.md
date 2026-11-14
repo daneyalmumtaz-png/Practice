@@ -9,6 +9,7 @@ technical and will take longer than the install.
 
 - [Before you start](#before-you-start)
 - [The shape of the deployment](#the-shape-of-the-deployment)
+- [Azure, and what about Cloudflare](#azure-and-what-about-cloudflare)
 - [Phase 1: pilot, about half a day](#phase-1-pilot-about-half-a-day)
 - [Phase 2: production](#phase-2-production)
 - [Running it day to day](#running-it-day-to-day)
@@ -90,6 +91,73 @@ cloud model in Phase 2 if the answer speed annoys people, which it will.
 Price the machine in your provider's calculator rather than trusting a figure
 here; they change. Disk is sized for the models (about 6 GB), the manuals, and
 the page-image cache, which grows slowly.
+
+## Azure, and what about Cloudflare
+
+### Azure: yes, on a virtual machine
+
+Take `Standard_D4s_v5` or similar, 4 vCPU and 16 GB, Ubuntu 24.04, in an EU
+region, with a managed disk and Azure Backup on it. Then follow Phase 1 below
+unchanged: it is a plain Linux machine running `docker compose`.
+
+**Not App Service and not Container Apps.** Both want their persistent storage
+mounted from Azure Files over SMB, and Microsoft's own documentation says of
+those mounts: "We don't recommend that you use storage mounts for local
+databases, such as SQLite, or for any other applications and components that
+rely on file handles and locks." This app's database is SQLite in WAL mode,
+which needs byte-range locking that SMB does not provide. The failure is not a
+clean error either: writes hang, then time out, and a database can be corrupted.
+Ollama is a second reason, needing 16 GB of memory and a persistent 6 GB model
+store that neither platform is shaped for.
+
+If Destia already runs Azure OpenAI, use it for the answer model and the machine
+drops to 2 vCPU and 8 GB, because nothing heavy runs locally except the
+embeddings. See [Phase 2](#phase-2-production) for the one request that has to
+be verified first.
+
+### Cloudflare: not for running it, but strongly worth it in front
+
+**Workers cannot run this app.** Python Workers are now generally available and
+do run FastAPI, but they execute CPython compiled to WebAssembly under Pyodide.
+PyMuPDF, which does all the PDF reading, is a binding to the MuPDF C library and
+has no WebAssembly wheel. On top of that there is a 128 MB memory ceiling shared
+with the runtime, threads do not work, and there is no local disk for SQLite,
+the manuals or the page-image cache. It is the wrong shape of platform for this,
+not a porting exercise.
+
+**Cloudflare Tunnel and Access in front of the Azure machine is the best
+available answer to two of the four obstacles above**, and it is worth putting
+to IT as the preferred design.
+
+- **Tunnel removes the inbound ports.** `cloudflared` runs on the machine and
+  makes an outbound connection to Cloudflare. Nothing listens on a public port,
+  no certificate challenge on port 80, and the machine needs no public IP. The
+  objection to opening 80 and 443 disappears rather than being argued about.
+- **Access gives Destia sign-on without the code being written.** Cloudflare
+  Access sits in front of the app and authenticates against Entra ID as a SAML
+  identity provider, so only signed-in Destia people reach it at all. The free
+  Zero Trust plan covers up to 50 users, which is a pilot and then some; beyond
+  that it is about 7 USD per user per month.
+
+Two honest costs:
+
+1. **The hostname has to live on a Cloudflare zone.** That means either moving
+   `destia.fi` nameservers to Cloudflare, which is a large decision nobody will
+   make for this app, or delegating one subdomain with an `NS` record. Ask for
+   the delegation, not the domain.
+2. **Colleagues would sign in twice** at first: once at Cloudflare Access with
+   their Destia account, then again with their app password. Access does pass
+   the authenticated identity to the origin in a signed `Cf-Access-Jwt-Assertion`
+   header, so a smaller change than full OpenID Connect could read it and drop
+   the second login. That change must verify the JWT signature, never trust the
+   plain email header, or anyone who reaches the origin directly can claim to be
+   anyone. With a tunnel there is no direct path, but defence in depth is the
+   whole point of the exercise.
+
+For the pilot, accept the double sign-in. It costs nothing to build and it is
+still a better security story than a password file behind an open port. Reports
+suggest the free Zero Trust checkout asks for card authorisation even at zero
+cost, so have IT confirm the billing position before anyone depends on it.
 
 ## Phase 1: pilot, about half a day
 

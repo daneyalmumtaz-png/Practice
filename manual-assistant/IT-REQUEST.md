@@ -55,9 +55,17 @@ Access control is the application's own login, not the firewall. Every page and
 every API call requires a signed-in session; there is no anonymous page except a
 health check that returns status flags and no configuration.
 
-If network-level restriction is required instead, the alternative is a
-DNS-01 certificate challenge against our DNS provider, which needs a different
-build of the proxy. Tell me and I will do that instead of opening port 80.
+**I would rather not open them at all, if you prefer.** If we put the host
+behind Cloudflare Tunnel, the machine makes an outbound connection only, needs
+no public IP and no inbound rule, and no certificate challenge. Cloudflare
+Access in front of it can authenticate against our Entra ID as a SAML identity
+provider, so only signed-in Destia people reach the application, which is a
+better answer than my own login page. The free Zero Trust tier covers up to 50
+users.
+
+That needs one thing from you: a subdomain delegated to a Cloudflare zone by
+`NS` record. I am not asking to move `destia.fi` itself. Tell me which design
+you want and I will build that one.
 
 ## Security
 
