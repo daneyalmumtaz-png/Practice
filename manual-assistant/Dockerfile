@@ -1,9 +1,10 @@
 # Manual Assistant. Non-root, pinned dependencies, healthcheck.
 FROM python:3.12-slim
 
-# curl is only here for the healthcheck below.
+# curl serves the healthcheck below. sqlite3 is for reading the question log and
+# the feedback on a running server, which DEPLOY.md's operations section does.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
+ && apt-get install -y --no-install-recommends curl sqlite3 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --uid 10001 appuser
@@ -20,6 +21,12 @@ COPY app/ ./app/
 COPY static/ ./static/
 COPY config.yaml ./
 COPY eval/ ./eval/
+COPY scripts/ ./scripts/
+# The tests and their pytest settings travel with the image, so the suite can be
+# run against the container that is actually deployed, which DEPLOY.md does after
+# every update. They generate their own PDFs and need no manual and no model.
+COPY tests/ ./tests/
+COPY pyproject.toml ./
 
 # The data volume is mounted here. Owned by the unprivileged user so the app can
 # write the database, the vectors and the page cache.

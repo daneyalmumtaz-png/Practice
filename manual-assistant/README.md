@@ -8,6 +8,10 @@ that opens the PDF at the cited page.
 Nothing is answered from the model's general knowledge. If the uploaded manuals
 do not contain the answer, the app says so and still shows the closest sections.
 
+Deploying this for colleagues rather than for yourself is a different job, with
+obligations that are not technical. `DEPLOY.md` is the runbook for that, and
+`IT-REQUEST.md` is the request to send Destia IT.
+
 ## Contents
 
 - [What it does](#what-it-does)
@@ -308,10 +312,12 @@ Type the password twice. Copy the printed hash, which starts `$2b$12$`.
 
 Then put the user somewhere the app reads. Two options.
 
-**A file on the data volume**, which survives rebuilds:
+**A file on the data volume**, which survives rebuilds. The `-T` matters:
+without it `exec` allocates a terminal, which can put a carriage return inside
+the hash and then nobody can sign in.
 
 ```bash
-docker compose exec app sh -c 'cat > /data/users.yaml' <<'YAML'
+docker compose exec -T app sh -c 'cat > /data/users.yaml' <<'YAML'
 users:
   - username: dmumtaz
     role: admin
