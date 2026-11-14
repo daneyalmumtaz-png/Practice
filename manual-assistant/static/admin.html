@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin</title>
+<link rel="stylesheet" href="/static/style.css">
+<!--APP_CONFIG-->
+</head>
+<body>
+<header class="bar">
+  <div class="inner">
+    <div class="who" id="who"></div>
+    <h1 id="app-name"></h1>
+    <p class="disclaimer">Document library. Superseded manuals stay searchable for admins and are never cited in answers.</p>
+  </div>
+</header>
+<main>
+  <div id="message"></div>
+
+  <form id="uploadform">
+    <fieldset class="upload">
+      <legend>Upload a manual</legend>
+      <label for="file">PDF file</label>
+      <input id="file" name="file" type="file" accept="application/pdf" required>
+      <label for="title">Title</label>
+      <input id="title" name="title" type="text" required placeholder="Title shown to users">
+      <div class="row2">
+        <div>
+          <label for="product">Product</label>
+          <select id="product" name="product"></select>
+        </div>
+        <div>
+          <label for="version">Version</label>
+          <input id="version" name="version" type="text" placeholder="for example 2024.1">
+        </div>
+      </div>
+      <label for="doc_status">Status</label>
+      <select id="doc_status" name="doc_status">
+        <option value="current">current</option>
+        <option value="superseded">superseded</option>
+      </select>
+      <label class="licence">
+        <input id="licence" name="licence_confirmed" type="checkbox" value="true" required>
+        <span>Destia is licensed to use this document in this internal tool.</span>
+      </label>
+      <button class="primary" type="submit" id="uploadbutton" style="margin-top:16px">Upload and index</button>
+    </fieldset>
+  </form>
+
+  <h2 class="section-heading">Documents</h2>
+  <div class="table-scroll">
+    <table class="docs">
+      <thead>
+        <tr>
+          <th>Title</th><th>Product</th><th>Version</th><th>Status</th>
+          <th>Ingest</th><th>Pages</th><th>Chunks</th><th>Licence</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="docrows"></tbody>
+    </table>
+  </div>
+</main>
+<script src="/static/admin.js"></script>
+</body>
+</html>

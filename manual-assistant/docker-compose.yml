@@ -1,0 +1,93 @@
+# Three services. Only caddy publishes ports, and only 80 and 443.
+# The app and ollama are reachable on the internal network and nowhere else.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    # No ports published. Nothing outside this network can reach the model.
+    volumes:
+      - ollama_models:/root/.ollama
+    # On first start this pulls the language model and the embedding model, then
+    # serves them. Afterwards the volume already has them and start-up is quick.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        ollama pull "${LLM_MODEL:-llama3.1:8b}"
+        ollama pull "${EMBED_MODEL:-bge-m3}"
+        wait
+    healthcheck:
+      # Healthy only once both models are present, so the app never starts
+      # against a half-populated model store.
+      test:
+        - CMD-SHELL
+        - >-
+          ollama list | grep -q "$(echo "${LLM_MODEL:-llama3.1:8b}" | cut -d: -f1)"
+          && ollama list | grep -q "$(echo "${EMBED_MODEL:-bge-m3}" | cut -d: -f1)"
+      interval: 15s
+      timeout: 10s
+      retries: 80          # first start has to download several gigabytes
+      start_period: 30s
+    restart: unless-stopped
+    # To use an NVIDIA GPU on the server, uncomment the block below and install
+    # the NVIDIA container toolkit on the host.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  app:
+    build: .
+    # No ports published. Reached only through caddy.
+    volumes:
+      - app_data:/data
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      DATA_DIR: /data
+      DB_PATH: /data/app.db
+      USERS_FILE: /data/users.yaml
+      # Default to the ollama service. Set these in .env to use a cloud provider.
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
+      EMBED_BASE_URL: ${EMBED_BASE_URL:-http://ollama:11434}
+      LLM_API_KEY: ${LLM_API_KEY:-not-needed-for-ollama}
+      LLM_MODEL: ${LLM_MODEL:-llama3.1:8b}
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      USERS_YAML: ${USERS_YAML:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-1}
+      RETENTION_DAYS: ${RETENTION_DAYS:-90}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-20}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-120}
+      EMBED_TIMEOUT_S: ${EMBED_TIMEOUT_S:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"            # redirects to 443 and answers the certificate challenge
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN in .env}
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  app_data:        # database, manuals, vectors, page cache, users.yaml
+  ollama_models:   # downloaded models
+  caddy_data:      # certificates
+  caddy_config:

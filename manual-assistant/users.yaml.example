@@ -1,0 +1,13 @@
+# Copy to users.yaml (which is gitignored) or paste into USERS_YAML.
+#
+# Generate a hash:
+#     python -m app.auth hash
+#
+# Roles: user can ask questions; admin can also upload, re-index and delete.
+users:
+  - username: admin
+    role: admin
+    password_hash: "replace-with-the-output-of-python-m-app-auth-hash"
+  - username: engineer
+    role: user
+    password_hash: "replace-with-the-output-of-python-m-app-auth-hash"

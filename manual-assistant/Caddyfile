@@ -1,0 +1,34 @@
+# Caddy obtains and renews a certificate for APP_DOMAIN automatically, and is the
+# only service with published ports. The app itself is not reachable from outside
+# the compose network.
+#
+# For a local trial without a domain, set APP_DOMAIN=localhost in .env. Caddy then
+# issues its own certificate and the browser will warn once.
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# Server-Sent Events must not be buffered, or the answer arrives all at once
+	# at the end instead of streaming.
+	reverse_proxy app:8000 {
+		flush_interval -1
+	}
+
+	# A manual is a large file. Allow time for the upload and for a long answer.
+	request_body {
+		max_size 210MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

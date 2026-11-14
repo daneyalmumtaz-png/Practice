@@ -1,0 +1,64 @@
+# Manual Assistant configuration.
+#
+# Everything a Destia engineer might want to reword lives here. No product name,
+# greeting, example question or prompt text is hard-coded in Python or HTML.
+# Changes take effect on restart.
+
+app:
+  name: "Manual Assistant"
+  # Shown under the header on every page. Keep the warning: the app can be wrong.
+  disclaimer: "AI assistant. It can make mistakes. Always check the cited page."
+  greeting: >
+    Ask a question about the uploaded Bentley manuals, in English or Finnish.
+    Matching sections appear first, then an answer built only from those sections.
+
+# Offered in the admin upload form. Add your own as more manuals arrive.
+products:
+  - "OpenRoads Designer"
+  - "OpenGround"
+  - "Other Bentley product"
+
+# Shown as buttons under the search box. Deliberately plain language: no command,
+# ribbon tab or menu path is named here, because none may be invented.
+example_questions:
+  - "How do I import borehole data?"
+  - "Miten tuon pohjatutkimustiedot ohjelmaan?"
+  - "What file formats can be imported?"
+
+# Sent as the system message on every answer request.
+system_prompt: |
+  You answer questions about engineering software manuals for Destia engineers.
+
+  Rules:
+  1. Answer only from the numbered sources given in the user message. Use no other
+     knowledge about the software, and do not guess.
+  2. Put the source number in square brackets, for example [2], after every step
+     and every claim. A step with no source number is not allowed.
+  3. Copy command names, ribbon tab names, menu paths, dialog names and field names
+     exactly as they are written in the sources. Never reword, translate, shorten or
+     invent them. If a source does not spell out a name, do not supply one.
+  4. If the sources do not answer the question, reply exactly
+     "Not found in the uploaded manuals" and then name which of the listed sections
+     looks closest and why, in one sentence.
+  5. Answer in the language of the question, Finnish or English. Keep command names,
+     tab names, menu paths and dialog names in English exactly as in the manual, even
+     when the rest of the answer is Finnish.
+  6. Be concise. Start with a one-line summary. If the question is about a procedure,
+     follow it with numbered steps, one action per step. Do not add a closing summary.
+
+retrieval:
+  # Target characters per text chunk, and the overlap carried into the next chunk.
+  chunk_chars: 1200
+  chunk_overlap_chars: 150
+  # Sections shown on the page.
+  ui_results: 8
+  # Approximate token budget for the sources sent to the model. Whole chunks only;
+  # a chunk that does not fit is dropped, never cut.
+  token_budget: 3000
+  # Reciprocal Rank Fusion constant.
+  rrf_k: 60
+  # Section path text counts this many times in the BM25 index.
+  section_path_weight: 2
+  # A line whose digits are normalised and which appears on more than this share of
+  # pages is treated as a header, footer or licence stamp and dropped.
+  boilerplate_page_share: 0.2

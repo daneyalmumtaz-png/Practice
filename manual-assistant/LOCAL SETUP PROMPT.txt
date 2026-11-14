@@ -1,0 +1,113 @@
+Install and run the Manual Assistant app on this Windows machine, then leave it
+running with a working web interface I can use.
+
+The app's folder is here:
+
+    D:\Development Stuff\manual-assistant
+
+If that folder does not exist, look in "D:\Development Stuff" for a file called
+manual-assistant.zip and unzip it there first, so that the path above exists and
+contains README.md, requirements.txt and the app, scripts, static and windows
+folders. Read "INSTALL - READ ME FIRST.txt" and README.md in that folder before
+you start. Work only inside "D:\Development Stuff". Do not touch anything else
+on this machine.
+
+Do these steps in order. After each one, tell me in one line whether it worked.
+If a step fails, stop, show me the exact error, and say what you need from me.
+Do not invent a workaround that skips a step.
+
+STEP 1. Check what is already installed.
+  Run, and report each version or that it is missing:
+      python --version
+      py -3 --version
+      winget --version
+      ollama --version
+  Do not install anything yet.
+
+STEP 2. Install Python 3.12 or newer, only if neither python nor py reported
+3.12 or newer.
+      winget install --id Python.Python.3.12 --source winget --accept-package-agreements --accept-source-agreements
+  Then open a new shell so the PATH is picked up, and confirm the version. If
+  winget is not available on this machine, stop and tell me, and I will install
+  Python by hand from python.org.
+
+STEP 3. Install Ollama, only if "ollama --version" failed.
+      winget install --id Ollama.Ollama --source winget --accept-package-agreements --accept-source-agreements
+  Then make sure the Ollama service is running: "ollama list" should answer
+  without an error. If it does not, start Ollama from the Start menu, wait ten
+  seconds, and try again.
+
+STEP 4. Download the two models.
+      ollama pull llama3.1:8b
+      ollama pull bge-m3
+  Together these are about 6 GB and can take a long time. Allow at least 30
+  minutes each before you decide one has failed. Run them one at a time and
+  report the result of each. Afterwards run "ollama list" and show me the output.
+
+STEP 5. Build the app's own Python environment.
+  From D:\Development Stuff\manual-assistant :
+      py -3 -m venv .venv
+      .venv\Scripts\python.exe -m pip install --upgrade pip
+      .venv\Scripts\python.exe -m pip install -r requirements.txt
+  Use .venv\Scripts\python.exe for every Python command from here on. Do not use
+  the system Python, and do not install anything that is not in
+  requirements.txt. The versions in that file are pinned on purpose.
+
+STEP 6. Prove the app is sound before configuring it.
+      .venv\Scripts\python.exe -m pytest -q
+  This should report 160 passed and takes about a minute and a half. It needs no
+  Ollama and no manuals. If anything fails, stop and show me the output.
+
+STEP 7. Create my account, without prompting for anything.
+      .venv\Scripts\python.exe scripts\first_run.py --non-interactive --username dmumtaz
+  This writes users.yaml and local.env and prints a generated password. Show me
+  that password clearly in your reply. It is stored only as a one way hash, so
+  if it is lost the account has to be made again.
+
+STEP 8. Put one example manual in the library, so the interface is not empty.
+      .venv\Scripts\python.exe scripts\demo_manual.py
+  This generates a small synthetic test document. It is not a real manual.
+  Report the page and chunk counts it prints.
+
+STEP 9. Start the app and leave it running.
+      .venv\Scripts\python.exe scripts\start.py
+  It prints the address, normally http://127.0.0.1:8000, and opens my browser.
+  Run it so that it keeps running after you finish, in a window I can see, and
+  tell me the address and how to stop it.
+
+STEP 10. Check it actually works, from outside the app.
+  In a second shell, with the app still running, confirm all four of these and
+  show me the result of each:
+    a) The health endpoint reports the app, the model and the embeddings:
+         curl http://127.0.0.1:8000/healthz
+       Expect "status":"ok", and "ok":true for both model and embeddings. If
+       either model reads false, Ollama or one of the two models is not ready;
+       go back to steps 3 and 4.
+    b) A page refuses to load without signing in: opening
+       http://127.0.0.1:8000/ must redirect to /login, not show the app.
+    c) Signing in with the username and password from step 7 works and the
+       Admin link appears.
+    d) Asking "How do I import borehole data?" returns matching sections, each
+       showing a section path, a printed page number and a PDF page number, and
+       then a written answer with [1] style citations. The sections should
+       appear in about a second. The written answer takes 20 to 60 seconds on a
+       machine with no graphics card, which is normal.
+
+Finally, report back:
+  - The address to open, and my username and password.
+  - Whether Ollama and both models are working, with the healthz output.
+  - That pytest passed, with the count.
+  - How to start the app again next time, and how to stop it.
+  - Anything you could not get working, stated plainly rather than glossed over.
+
+Rules while you do this:
+  - Never run the app with HOST set to 0.0.0.0 on this machine. It must stay on
+    127.0.0.1 so nothing is exposed to the office network.
+  - Do not edit any file in the app folder except local.env and users.yaml, and
+    only through the scripts above. If you think application code needs
+    changing, stop and tell me instead.
+  - Do not put my password into any file other than the ones the script writes,
+    and do not paste it into a git commit, a log or a comment.
+  - Do not commit anything to git, and do not delete anything I have not asked
+    you to delete.
+  - If you are unsure whether a command is safe, ask me first.
