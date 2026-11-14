@@ -8,7 +8,9 @@ that opens the PDF at the cited page.
 Nothing is answered from the model's general knowledge. If the uploaded manuals
 do not contain the answer, the app says so and still shows the closest sections.
 
-Deploying this for colleagues rather than for yourself is a different job, with
+Showing it in a meeting from your own machine? `DEMO.md` is the run sheet.
+
+Deploying it for colleagues rather than for yourself is a different job, with
 obligations that are not technical. `DEPLOY.md` is the runbook for that, and
 `IT-REQUEST.md` is the request to send Destia IT.
 
